@@ -1,0 +1,55 @@
+name: Build AMR (Skyrim AE 1.6.1170)
+
+on:
+  push:
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      # This repository (the AMR 1.6.1170 port)
+      - uses: actions/checkout@v4
+        with:
+          path: AnimationMotionRevolution
+
+      # CommonLibSSE-NG 15.7.3, the exact commit the port was made against.
+      # The port's CMake expects it next to the project as ../CommonLibSSE-NG-ng
+      - uses: actions/checkout@v4
+        with:
+          repository: alandtse/CommonLibVR
+          ref: 07262cc2ae75777a422ed0c9621310fadef7c382
+          path: CommonLibSSE-NG-ng
+          submodules: recursive
+
+      # MSVC compiler + Ninja in PATH
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Set up vcpkg
+        shell: pwsh
+        run: |
+          git clone https://github.com/microsoft/vcpkg "$env:RUNNER_TEMP\vcpkg"
+          & "$env:RUNNER_TEMP\vcpkg\bootstrap-vcpkg.bat" -disableMetrics
+          "VCPKG_ROOT=$env:RUNNER_TEMP\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Configure
+        working-directory: AnimationMotionRevolution
+        run: cmake --preset ae1170
+
+      - name: Build
+        working-directory: AnimationMotionRevolution
+        run: cmake --build --preset ae1170 --parallel
+
+      - name: Package
+        working-directory: AnimationMotionRevolution
+        run: cmake --install build/ae1170 --component AMR --prefix ../dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AnimationMotionRevolution-AE1170
+          path: dist
