@@ -63,6 +63,8 @@ namespace
 		if (a_message->type == SKSE::MessagingInterface::kPreLoadGame ||
 			a_message->type == SKSE::MessagingInterface::kNewGame) {
 			hooks::ClearMotionCache();
+			// Every plugin has installed its hooks by now, so ours end up outermost (see Hooks.h).
+			hooks::InstallLateHooks();
 		}
 #ifdef AMR_ENABLE_TRUEHUD_DEBUG
 		if (a_message && a_message->type == SKSE::MessagingInterface::kPostLoad) {

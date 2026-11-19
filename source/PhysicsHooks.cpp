@@ -130,4 +130,20 @@ namespace hooks
             }
         }
     }
+
+    // Outermost on-ground step (installed late): other plugins' hooks run inside it; when this frame's animmotion curve
+    // lifts the actor, re-apply the lift speed they may have cleared.
+    void SimulateGroundOuter(RE::bhkCharacterStateOnGround* a_this, RE::bhkCharacterController* a_characterController)
+    {
+        bhkCharacterStateOnGround::OuterSimulateStatePhysics(a_this, a_characterController);
+        if (!a_characterController) {
+            return;
+        }
+        float wantSpeed = 0.0F;
+        bool  logNow = false;
+        if (amr::vertical::Speed(std::addressof(a_characterController->context), wantSpeed, logNow) &&
+            wantSpeed > amr::vertical::kMinLiftSpeed) {
+            a_characterController->outVelocity.quad.m128_f32[2] = wantSpeed / amr::vertical::kHavokToGame;
+        }
+    }
 }
