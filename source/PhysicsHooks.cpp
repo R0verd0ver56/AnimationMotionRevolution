@@ -84,19 +84,20 @@ namespace hooks
         if (const auto gravity = getGravity(world.get())) {
             a_characterController->outVelocity = a_characterController->outVelocity + *gravity * a_characterController->stepInfo.deltaTime;
         }
-        // Vertical root motion (VerticalMotion.h): a rising animmotion curve lifts the actor off the
-        // ground; the in-air hook below keeps following the curve.
+        // Vertical root motion (VerticalMotion.h): a launch curve lifts the actor off the ground; the in-air
+        // hook below keeps the actor on the curve.
         {
-            float wantSpeed = 0.0F;
-            bool  logNow = false;
-            if (amr::vertical::Speed(std::addressof(a_characterController->context), wantSpeed, logNow) &&
-                wantSpeed > amr::vertical::kMinLiftSpeed) {
-                a_characterController->outVelocity.quad.m128_f32[2] = wantSpeed / amr::vertical::kHavokToGame;
+            const float currentZ = amr::vertical::Z(position) * amr::vertical::kHavokToGame;
+            float       velocity = 0.0F;
+            float       targetZ = 0.0F;
+            bool        logNow = false;
+            if (amr::vertical::Command(std::addressof(a_characterController->context), currentZ, velocity, targetZ, logNow) &&
+                velocity > 50.0F) {
+                amr::vertical::SetZ(a_characterController->outVelocity, velocity / amr::vertical::kHavokToGame);
                 a_characterController->wantState = RE::hkpCharacterStateType::kInAir;
                 a_characterController->flags.reset(RE::CHARACTER_FLAGS::kSupport);
                 if (logNow) {
-                    logger::info("[AMR-VZ] lift off: curve {:.1f} u/s at height {:.1f}", wantSpeed,
-                        position.quad.m128_f32[2] * amr::vertical::kHavokToGame);
+                    logger::info("[AMR-VZ] lift off: {:.1f} u/s, height {:.1f} -> curve {:.1f}", velocity, currentZ, targetZ);
                 }
             }
         }
@@ -117,33 +118,34 @@ namespace hooks
         if (!a_characterController) {
             return;
         }
-        float wantSpeed = 0.0F;
-        bool  logNow = false;
-        if (amr::vertical::Speed(std::addressof(a_characterController->context), wantSpeed, logNow)) {
-            // keep following the rising curve in the air; after the peak gravity / CGAT take over (VerticalMotion.h)
-            a_characterController->outVelocity.quad.m128_f32[2] = wantSpeed / amr::vertical::kHavokToGame;
+        const float currentZ = amr::vertical::ControllerHeight(a_characterController);
+        float       velocity = 0.0F;
+        float       targetZ = 0.0F;
+        bool        logNow = false;
+        if (amr::vertical::Command(std::addressof(a_characterController->context), currentZ, velocity, targetZ, logNow)) {
+            // stay on the launch curve (rise and hover); once it comes down gravity / CGAT take over (VerticalMotion.h)
+            amr::vertical::SetZ(a_characterController->outVelocity, velocity / amr::vertical::kHavokToGame);
             if (logNow) {
-                RE::hkVector4 position;
-                a_characterController->GetPosition(position, true);
-                logger::info("[AMR-VZ] in air: curve {:.1f} u/s at height {:.1f}", wantSpeed,
-                    position.quad.m128_f32[2] * amr::vertical::kHavokToGame);
+                logger::info("[AMR-VZ] in air: {:.1f} u/s, height {:.1f} -> curve {:.1f}", velocity, currentZ, targetZ);
             }
         }
     }
 
-    // Outermost on-ground step (installed late): other plugins' hooks run inside it; when this frame's animmotion curve
-    // lifts the actor, re-apply the lift speed they may have cleared.
+    // Outermost on-ground step (installed late): other plugins' hooks run inside it; when a launch curve lifts the
+    // actor, re-apply the lift speed they may have cleared.
     void SimulateGroundOuter(RE::bhkCharacterStateOnGround* a_this, RE::bhkCharacterController* a_characterController)
     {
         bhkCharacterStateOnGround::OuterSimulateStatePhysics(a_this, a_characterController);
         if (!a_characterController) {
             return;
         }
-        float wantSpeed = 0.0F;
-        bool  logNow = false;
-        if (amr::vertical::Speed(std::addressof(a_characterController->context), wantSpeed, logNow) &&
-            wantSpeed > amr::vertical::kMinLiftSpeed) {
-            a_characterController->outVelocity.quad.m128_f32[2] = wantSpeed / amr::vertical::kHavokToGame;
+        const float currentZ = amr::vertical::ControllerHeight(a_characterController);
+        float       velocity = 0.0F;
+        float       targetZ = 0.0F;
+        bool        logNow = false;
+        if (amr::vertical::Command(std::addressof(a_characterController->context), currentZ, velocity, targetZ, logNow) &&
+            velocity > 50.0F) {
+            amr::vertical::SetZ(a_characterController->outVelocity, velocity / amr::vertical::kHavokToGame);
         }
     }
 }
