@@ -1,6 +1,7 @@
 #pragma once
 
 #include "HookInstallation.h"
+#include "utils/Logger.h"
 
 #include "GameABI.h"
 #include "RE/B/BShkbAnimationGraph.h"
@@ -71,6 +72,8 @@ namespace hooks
 		static inline REL::Relocation<std::uintptr_t> vTable{ RE::VTABLE_bhkCharacterStateOnGround[0] };
 
 		static inline REL::Relocation<void (*)(RE::bhkCharacterStateOnGround*, RE::bhkCharacterController*)> SimulateStatePhysics;
+		// Whatever sat in the slot when the late hooks were installed (other plugins such as CGAT wrap AMR's hook).
+		static inline REL::Relocation<void (*)(RE::bhkCharacterStateOnGround*, RE::bhkCharacterController*)> OuterSimulateStatePhysics;
 	};
 
 	class bhkCharacterStateInAir
@@ -98,6 +101,21 @@ namespace hooks
 
 	void SimulateStatePhysics(RE::bhkCharacterStateOnGround* a_this, RE::bhkCharacterController* a_characterController);
 	void SimulateInAirPhysics(RE::bhkCharacterState* a_this, RE::bhkCharacterController* a_characterController);
+	void SimulateGroundOuter(RE::bhkCharacterStateOnGround* a_this, RE::bhkCharacterController* a_characterController);
+
+	// Vertical root motion hooks that must wrap other plugins' physics hooks (CGAT's inertia / gravity hook the same
+	// on-ground and in-air slots and load after AMR). Installed once, just before the first save loads / new game.
+	inline void InstallLateHooks()
+	{
+		static bool installed = false;
+		if (installed) {
+			return;
+		}
+		installed = true;
+		bhkCharacterStateInAir::SimulateStatePhysics = bhkCharacterStateInAir::vTable.write_vfunc(8, SimulateInAirPhysics);
+		bhkCharacterStateOnGround::OuterSimulateStatePhysics = bhkCharacterStateOnGround::vTable.write_vfunc(8, SimulateGroundOuter);
+		logger::info("[AMR-VZ] late physics hooks installed (vertical motion now applied after other plugins)");
+	}
 	void ClearMotionCache();
 	RE::BShkbAnimationGraph* CreateGraph(RE::BShkbAnimationGraph* a_graph, RE::TESObjectREFR* a_holder, bool a_flag);
 	void DestroyGraph(RE::BShkbAnimationGraph* a_graph);
@@ -141,6 +159,5 @@ namespace hooks
 		OriginalCreateGraph = originals.graphCreate;
 		OriginalDestroyGraph = originals.graphDestroy;
 		bhkCharacterStateOnGround::SimulateStatePhysics = bhkCharacterStateOnGround::vTable.write_vfunc(8, SimulateStatePhysics);
-		bhkCharacterStateInAir::SimulateStatePhysics = bhkCharacterStateInAir::vTable.write_vfunc(8, SimulateInAirPhysics);
 	}
 }
