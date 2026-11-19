@@ -893,7 +893,9 @@ namespace hooks
 						break;
 				}
 					// Vertical root motion: turn this clip's Z curve into a lift speed (VerticalMotion.h).
-					amr::vertical::Sample(a_character, a_clipName->c_str(), a_motionTime, a_translation,
+					// v6: the authored curve, not the warped / edge-protected output (warping toward a target
+					// on higher ground must not read as a launch).
+					amr::vertical::Sample(a_character, a_clipName->c_str(), a_motionTime, authoredTranslation,
 						binding.data->hasVerticalMotion);
 					if (updateWarpingVariable) {
 						if (previousOwner) {

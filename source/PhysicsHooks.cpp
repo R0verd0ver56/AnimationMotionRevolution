@@ -43,6 +43,22 @@ namespace hooks
             const auto event = amr::MakePhysicsUpdateEvent(character.get());
             source->SendEvent(&event);
         }
+        // v6: the custom on-ground step below is only needed while an AMR motion clip drives this actor (or a
+        // launch is being followed). Otherwise run the game's own on-ground physics, so ordinary walking and
+        // standing behave exactly as without AMR (no brief switches to in-air on slopes and uneven ground).
+        {
+            const auto graph = amr::abi::ActiveGraph(character.get());
+            const bool motion = graph && HasAnimMotionData(std::addressof(graph->characterInstance));
+            float      velocity = 0.0F;
+            float      targetZ = 0.0F;
+            bool       logNow = false;
+            const bool lifting = amr::vertical::Command(std::addressof(a_characterController->context),
+                amr::vertical::ControllerHeight(a_characterController), velocity, targetZ, logNow);
+            if (!motion && !lifting) {
+                bhkCharacterStateOnGround::SimulateStatePhysics(a_this, a_characterController);
+                return;
+            }
+        }
 
         const RE::NiPointer<RE::bhkWorld> world(a_characterController->GetHavokWorld());
         if (!world) {
