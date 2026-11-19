@@ -892,8 +892,9 @@ namespace hooks
 						}
 						break;
 				}
-					// Keep vertical root motion (see VerticalMotion.h).
-					amr::vertical::Update(a_character, a_translation);
+					// Vertical root motion: turn this clip's Z curve into a lift speed (VerticalMotion.h).
+					amr::vertical::Sample(a_character, a_clipName->c_str(), a_motionTime, a_translation,
+						binding.data->hasVerticalMotion);
 					if (updateWarpingVariable) {
 						if (previousOwner) {
 							SetWarpingGraphVariable(previousOwner, AnyWarping(previousOwner));
@@ -914,12 +915,12 @@ namespace hooks
 					std::addressof(a_container->translationDataPtr),
 					a_motionTime,
 					a_translation);
-				amr::vertical::Update(a_character, RE::NiPoint3{});  // vanilla motion: no swim trick
+				amr::vertical::Clear(a_character);  // vanilla motion: no curve to follow
 				return;
 			}
 
 			a_translation = {};
-			amr::vertical::Update(a_character, a_translation);
+			amr::vertical::Clear(a_character);
 		}
 
 		void ProcessRotationDataHook(

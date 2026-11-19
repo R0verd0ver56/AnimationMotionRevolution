@@ -1,6 +1,7 @@
 #include "Hooks.h"
 #include "PhysicsEvents.h"
 #include "VerticalMotion.h"
+#include "utils/Logger.h"
 
 #include <algorithm>
 
@@ -10,11 +11,6 @@ namespace hooks
     {
         if (!a_this) {
             return RE::hkpCharacterStateType::kOnGround;
-        }
-        // An animmotion curve with height this frame: report swimming so the engine keeps the
-        // vertical part of the motion (upstream AMR behaviour, see VerticalMotion.h).
-        if (amr::vertical::IsActive(a_this)) {
-            return RE::hkpCharacterStateType::kSwimming;
         }
         const auto state = amr::abi::GroundState(a_this);
         return !state || state->unk10 ? a_this->currentState : RE::hkpCharacterStateType::kSwimming;
@@ -88,6 +84,22 @@ namespace hooks
         if (const auto gravity = getGravity(world.get())) {
             a_characterController->outVelocity = a_characterController->outVelocity + *gravity * a_characterController->stepInfo.deltaTime;
         }
+        // Vertical root motion (VerticalMotion.h): a rising animmotion curve lifts the actor off the
+        // ground; the in-air hook below keeps following the curve.
+        {
+            float wantSpeed = 0.0F;
+            bool  logNow = false;
+            if (amr::vertical::Speed(std::addressof(a_characterController->context), wantSpeed, logNow) &&
+                wantSpeed > amr::vertical::kMinLiftSpeed) {
+                a_characterController->outVelocity.quad.m128_f32[2] = wantSpeed / amr::vertical::kHavokToGame;
+                a_characterController->wantState = RE::hkpCharacterStateType::kInAir;
+                a_characterController->flags.reset(RE::CHARACTER_FLAGS::kSupport);
+                if (logNow) {
+                    logger::info("[AMR-VZ] lift off: curve {:.1f} u/s at height {:.1f}", wantSpeed,
+                        position.quad.m128_f32[2] * amr::vertical::kHavokToGame);
+                }
+            }
+        }
         if (a_characterController->wantState != RE::hkpCharacterStateType::kTotal) {
             a_characterController->context.currentState = a_characterController->wantState;
             a_characterController->wantState = RE::hkpCharacterStateType::kTotal;
@@ -96,6 +108,26 @@ namespace hooks
         if (stateType != RE::hkpCharacterStateType::kOnGround) {
             const auto state = skyrim_cast<RE::bhkCharacterState*>(amr::abi::RegisteredState(&a_characterController->context, stateType));
             amr::abi::SimulateStatePhysics(state, a_characterController);
+        }
+    }
+
+    void SimulateInAirPhysics(RE::bhkCharacterState* a_this, RE::bhkCharacterController* a_characterController)
+    {
+        bhkCharacterStateInAir::SimulateStatePhysics(a_this, a_characterController);
+        if (!a_characterController) {
+            return;
+        }
+        float wantSpeed = 0.0F;
+        bool  logNow = false;
+        if (amr::vertical::Speed(std::addressof(a_characterController->context), wantSpeed, logNow)) {
+            // follow the curve in the air (rise, hover, come down); gravity takes over when it ends
+            a_characterController->outVelocity.quad.m128_f32[2] = wantSpeed / amr::vertical::kHavokToGame;
+            if (logNow) {
+                RE::hkVector4 position;
+                a_characterController->GetPosition(position, true);
+                logger::info("[AMR-VZ] in air: curve {:.1f} u/s at height {:.1f}", wantSpeed,
+                    position.quad.m128_f32[2] * amr::vertical::kHavokToGame);
+            }
         }
     }
 }
