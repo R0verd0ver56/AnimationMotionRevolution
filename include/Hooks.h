@@ -73,6 +73,14 @@ namespace hooks
 		static inline REL::Relocation<void (*)(RE::bhkCharacterStateOnGround*, RE::bhkCharacterController*)> SimulateStatePhysics;
 	};
 
+	class bhkCharacterStateInAir
+	{
+	public:
+		static inline REL::Relocation<std::uintptr_t> vTable{ RE::VTABLE_bhkCharacterStateInAir[0] };
+
+		static inline REL::Relocation<void (*)(RE::bhkCharacterState*, RE::bhkCharacterController*)> SimulateStatePhysics;
+	};
+
 	class bhkCharacterController
 	{
 		static constexpr REL::RelocationID UpdateStateAndMovementId{ 76436, 78275 };
@@ -89,6 +97,7 @@ namespace hooks
 	};
 
 	void SimulateStatePhysics(RE::bhkCharacterStateOnGround* a_this, RE::bhkCharacterController* a_characterController);
+	void SimulateInAirPhysics(RE::bhkCharacterState* a_this, RE::bhkCharacterController* a_characterController);
 	void ClearMotionCache();
 	RE::BShkbAnimationGraph* CreateGraph(RE::BShkbAnimationGraph* a_graph, RE::TESObjectREFR* a_holder, bool a_flag);
 	void DestroyGraph(RE::BShkbAnimationGraph* a_graph);
@@ -132,5 +141,6 @@ namespace hooks
 		OriginalCreateGraph = originals.graphCreate;
 		OriginalDestroyGraph = originals.graphDestroy;
 		bhkCharacterStateOnGround::SimulateStatePhysics = bhkCharacterStateOnGround::vTable.write_vfunc(8, SimulateStatePhysics);
+		bhkCharacterStateInAir::SimulateStatePhysics = bhkCharacterStateInAir::vTable.write_vfunc(8, SimulateInAirPhysics);
 	}
 }
