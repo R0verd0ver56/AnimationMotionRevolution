@@ -10,7 +10,8 @@
 //     (game units per second), tracked per character controller AND per clip;
 //   * the on-ground physics step switches the controller to in-air when the curve rises, and sets
 //     its vertical velocity from the curve;
-//   * the in-air physics step keeps following the curve (up and down) while the curve is active.
+//   * the in-air physics step keeps following the curve while it rises; after the peak, normal gravity
+//     (and CGAT's slow fall / hover) bring the actor down so landing is detected normally.
 //
 // Per-clip tracking matters: Open Animation Replacer keeps a duplicate of each replaced clip
 // generator ("Duplicate_MCO_ClipGenerator_...") and the game can sample both in the same frame.
@@ -33,8 +34,10 @@ namespace amr::vertical
 	inline constexpr auto kSampleLifetime = std::chrono::milliseconds(100);
 	// Game units per Havok unit.
 	inline constexpr float kHavokToGame = 69.991249F;
-	// Below this rise speed (game units / s) the actor is not pulled off the ground.
-	inline constexpr float kMinLiftSpeed = 5.0F;
+	// Below this rise speed (game units / s) the actor is not pulled off the ground. Real launches rise at
+	// 500-2000 u/s; small values come from curve noise at the start / end of a clip and only made the game
+	// think the actor was airborne for a moment (aerial attacks played on the ground).
+	inline constexpr float kMinLiftSpeed = 150.0F;
 
 	struct ClipTrack
 	{
@@ -43,6 +46,8 @@ namespace amr::vertical
 		float             prevZ{ 0.0F };
 		float             speed{ 0.0F };  // game units / s, + up
 		bool              hasSpeed{ false };
+		bool              rose{ false };    // curve has lifted (speed over kMinLiftSpeed)
+		bool              peaked{ false };  // curve has turned down after rising: hand over to gravity / CGAT
 	};
 
 	struct ActorTrack
@@ -92,6 +97,8 @@ namespace amr::vertical
 		if (t.stamp == Clock::time_point{} || now - t.stamp > kSampleLifetime || dt < -0.25F) {
 			// first sample of this clip (or it restarted): speed comes with the next sample
 			t.hasSpeed = false;
+			t.rose = false;
+			t.peaked = false;
 		} else if (dt < 0.0005F) {
 			// The game samples a clip more than once per frame (previous and current time): keep the speed.
 			t.stamp = now;
@@ -99,6 +106,11 @@ namespace amr::vertical
 		} else {
 			t.speed = (a_translation.z - t.prevZ) / dt;
 			t.hasSpeed = true;
+			if (t.speed > kMinLiftSpeed) {
+				t.rose = true;
+			} else if (t.rose && t.speed < 0.0F) {
+				t.peaked = true;
+			}
 		}
 		t.prevTime = a_motionTime;
 		t.prevZ = a_translation.z;
@@ -121,7 +133,10 @@ namespace amr::vertical
 				c = it->second.clips.erase(c);
 				continue;
 			}
-			if (c->second.hasSpeed && (!best || c->second.stamp > best->stamp)) {
+			// Only rising curves are followed. After the peak the game's own falling / landing (with CGAT's
+			// gravity) takes over, so landing is detected normally and the actor is not held "in the air".
+			if (c->second.hasSpeed && !c->second.peaked && c->second.speed > 0.0F &&
+				(!best || c->second.stamp > best->stamp)) {
 				best = std::addressof(c->second);
 			}
 			++c;
