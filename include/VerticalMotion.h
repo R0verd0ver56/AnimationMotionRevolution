@@ -36,6 +36,9 @@ namespace amr::vertical
 	// A clip only counts as a launch once its curve rises faster than this (game units / s). Real launches
 	// rise at 500-2000 u/s; small values are curve noise and must not pop the actor off the ground.
 	inline constexpr float kMinLiftSpeed = 150.0F;
+	// v6: ...and only once it has also risen at least this far above where it started (game units). Real
+	// launches rise 150-250 units; small bumps in ordinary attacks must never switch anyone to in-air.
+	inline constexpr float kMinRise = 20.0F;
 	// Release the actor to gravity once the curve has come down this far below its highest point.
 	inline constexpr float kReleaseDrop = 15.0F;
 	// How strongly a height shortfall / overshoot is corrected (per second).
@@ -74,6 +77,7 @@ namespace amr::vertical
 		float             speed{ 0.0F };   // curve speed, game units / s, + up
 		float             baseZ{ 0.0F };   // actor height where the curve's 0 is
 		float             maxZ{ 0.0F };    // highest curve height so far
+		float             startZ{ 0.0F };  // curve height at the clip's first sample
 		bool              hasSpeed{ false };
 		bool              rose{ false };    // curve rose faster than kMinLiftSpeed: this is a launch
 		bool              released{ false };  // curve came down: gravity / CGAT have the actor now
@@ -97,12 +101,26 @@ namespace amr::vertical
 		return registry;
 	}
 
+	// v6: lifts are only for the player, the player's followers / summons and copies of the player
+	// (Vergil's Doppelganger). Enemies' attacks are never turned into launches.
+	inline bool LiftAllowed(RE::Character* a_character)
+	{
+		if (!a_character) {
+			return false;
+		}
+		if (a_character->IsPlayerRef() || a_character->IsPlayerTeammate() || a_character->IsCommandedActor()) {
+			return true;
+		}
+		const auto* base = a_character->GetActorBase();
+		return base && base->GetFormID() == 0x7;
+	}
+
 	// Translation hook, custom (animmotion) branch: a_translation is the cumulative displacement of
 	// the clip at a_motionTime.
 	inline void Sample(RE::Character* a_character, const void* a_clip, float a_motionTime, const RE::NiPoint3& a_translation,
 		bool a_clipHasVerticalMotion)
 	{
-		if (!a_clipHasVerticalMotion || !a_character) {
+		if (!a_clipHasVerticalMotion || !a_character || !LiftAllowed(a_character)) {
 			return;  // other clips never cancel a running curve; samples simply expire
 		}
 		auto* controller = a_character->GetCharController();
@@ -122,6 +140,7 @@ namespace amr::vertical
 			t = ClipTrack{};
 			t.baseZ = actorZ - a_translation.z;
 			t.maxZ = a_translation.z;
+			t.startZ = a_translation.z;
 		} else if (dt < 0.0005F) {
 			// The game samples a clip more than once per frame (previous and current time): keep the speed.
 			t.stamp = now;
@@ -130,7 +149,7 @@ namespace amr::vertical
 			t.speed = (a_translation.z - t.prevZ) / dt;
 			t.hasSpeed = true;
 			if (!t.rose) {
-				if (t.speed > kMinLiftSpeed) {
+				if (t.speed > kMinLiftSpeed && a_translation.z - t.startZ >= kMinRise) {
 					t.rose = true;
 				} else {
 					// not launched yet: keep the curve's 0 at the actor's current height (slopes, steps)
