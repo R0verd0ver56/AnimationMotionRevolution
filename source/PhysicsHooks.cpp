@@ -120,7 +120,7 @@ namespace hooks
         float wantSpeed = 0.0F;
         bool  logNow = false;
         if (amr::vertical::Speed(std::addressof(a_characterController->context), wantSpeed, logNow)) {
-            // follow the curve in the air (rise, hover, come down); gravity takes over when it ends
+            // keep following the rising curve in the air; after the peak gravity / CGAT take over (VerticalMotion.h)
             a_characterController->outVelocity.quad.m128_f32[2] = wantSpeed / amr::vertical::kHavokToGame;
             if (logNow) {
                 RE::hkVector4 position;
