@@ -152,7 +152,8 @@ namespace hooks
 				REL::Relocation<std::uintptr_t>{ REL::ID(63547) }.address() + 0x1F },
 			{ REL::Relocation<std::uintptr_t>{ REL::ID(63547) }.address() + 0x38,
 				REL::Relocation<std::uintptr_t>{ REL::ID(63758) }.address() + 0x19 },
-			REL::Relocation<std::uintptr_t>{ REL::Offset(0x166E737) }.address()
+			REL::Relocation<std::uintptr_t>{ REL::Offset(
+				REL::Module::get().version() >= REL::Version{ 1, 7, 0, 0 } ? 0x16DFF57 : 0x166E737) }.address()
 		}, functionTables);
 		hkbClipGenerator::ComputeStartTime = originals.activate;
 		hkbClipGenerator::ResetIgnoreStartTime = originals.deactivate;
