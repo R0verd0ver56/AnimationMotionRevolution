@@ -84,7 +84,12 @@ namespace
 
 SKSEPluginLoad(const SKSE::LoadInterface* a_skse)
 {
-	if (a_skse->IsEditor() || a_skse->RuntimeVersion() != REL::Version{ 1, 6, 1170, 0 } ||
+	// Supported runtimes: 1.6.1170 (SKSE 2.2.6) and 1.7.104 (SKSE 2.3.x).
+	// Every hook site was re-checked against the 1.7.104 executable; only the
+	// graph-destroy tail jump moved (see Hooks.h).
+	const auto runtime = a_skse->RuntimeVersion();
+	if (a_skse->IsEditor() ||
+		(runtime != REL::Version{ 1, 6, 1170, 0 } && runtime != REL::Version{ 1, 7, 104, 0 }) ||
 		a_skse->SKSEVersion() < REL::Version{ 2, 2, 6, 0 }.pack()) {
 		return false;
 	}
