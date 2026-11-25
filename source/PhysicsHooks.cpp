@@ -4,9 +4,58 @@
 #include "utils/Logger.h"
 
 #include <algorithm>
+#include <mutex>
+#include <unordered_map>
 
 namespace hooks
 {
+    namespace
+    {
+        // v7 (1.7.104): the one-step ground-ray misses that happen while standing on flat ground during attack clips
+        // switched the actor to in-air at once (aerial attack on the ground). Real drops still switch immediately
+        // when a longer probe shows the ground is far below; otherwise the switch waits for kMissesBeforeAir
+        // consecutive misses (K=6 was tested in game; K=4 falls sooner, K=8 filters more flicker).
+        constexpr std::uint32_t kMissesBeforeAir = 6;
+        constexpr float         kFarProbeLength = 1.5F;      // havok units (~105 game units)
+        constexpr float         kFarGroundDistance = 0.7F;   // havok units (~49 game units), beyond the 0.5 short ray
+
+        std::mutex                                                          g_missLock;
+        std::unordered_map<const RE::bhkCharacterController*, std::uint32_t> g_misses;
+
+        void ResetMisses(const RE::bhkCharacterController* a_controller)
+        {
+            std::lock_guard guard(g_missLock);
+            if (!g_misses.empty()) {
+                g_misses.erase(a_controller);
+            }
+        }
+
+        // true once the miss should really switch the actor to in-air
+        bool ShouldGoInAir(const RE::bhkCharacterController* a_controller, RE::bhkWorld* a_world,
+            const RE::hkVector4& a_position, const RE::CFilter& a_filter)
+        {
+            RE::bhkPickData farPick;
+            farPick.rayInput.from = a_position;
+            farPick.rayInput.to = a_position - RE::hkVector4{ 0.0F, 0.0F, kFarProbeLength, 0.0F };
+            farPick.rayInput.filterInfo = a_filter;
+            a_world->PickObject(farPick);
+            if (farPick.rayOutput.HasHit() && farPick.rayOutput.hitFraction * kFarProbeLength > kFarGroundDistance) {
+                ResetMisses(a_controller);
+                return true;
+            }
+            std::lock_guard guard(g_missLock);
+            if (g_misses.size() > 256) {
+                g_misses.clear();
+            }
+            const auto count = ++g_misses[a_controller];
+            if (count >= kMissesBeforeAir) {
+                g_misses.erase(a_controller);
+                return true;
+            }
+            return false;
+        }
+    }
+
     RE::hkpCharacterStateType hkpCharacterContext::GetCharacterState_Hook(RE::hkpCharacterContext* a_this)
     {
         if (!a_this) {
@@ -75,10 +124,11 @@ namespace hooks
         pickData.rayInput.filterInfo = collisionFilterInfo;
         world->PickObject(pickData);
         if (pickData.rayOutput.rootCollidable) {
+            ResetMisses(a_characterController);
             if (pickData.rayOutput.normal.quad.m128_f32[2] < a_characterController->zNormal) {
                 a_characterController->flags.set(RE::CHARACTER_FLAGS::kSupport);
             }
-        } else {
+        } else if (ShouldGoInAir(a_characterController, world.get(), position, collisionFilterInfo)) {
             a_characterController->wantState = RE::hkpCharacterStateType::kInAir;
             a_characterController->flags.reset(RE::CHARACTER_FLAGS::kSupport);
         }
