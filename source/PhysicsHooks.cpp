@@ -16,7 +16,7 @@ namespace hooks
         // when a longer probe shows the ground is far below. The player also switches at once when the probe finds no
         // ground at all (tall ledge); otherwise the switch waits for the miss threshold below (255 player, 6 enemies).
         constexpr std::uint32_t kMissesBeforeAirPlayer = 255;  // player: only a real drop (far probe) switches to air
-        constexpr std::uint32_t kMissesBeforeAirOther = 6;     // enemies: the K=6 behaviour that gave the consistent knock-up
+        constexpr std::uint32_t kMissesBeforeAirOther = 2;     // enemies: the K=6 behaviour that gave the consistent knock-up
         constexpr float         kFarProbeLength = 1.5F;      // havok units (~105 game units)
         constexpr float         kFarGroundDistance = 0.7F;   // havok units (~49 game units), beyond the 0.5 short ray
 
