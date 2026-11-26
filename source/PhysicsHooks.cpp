@@ -15,7 +15,7 @@ namespace hooks
         // switched the actor to in-air at once (aerial attack on the ground). Real drops still switch immediately
         // when a longer probe shows the ground is far below; otherwise the switch waits for kMissesBeforeAir
         // consecutive misses (K=6 was tested in game; K=4 falls sooner, K=8 filters more flicker).
-        constexpr std::uint32_t kMissesBeforeAir = 6;
+        constexpr std::uint32_t kMissesBeforeAir = 255;
         constexpr float         kFarProbeLength = 1.5F;      // havok units (~105 game units)
         constexpr float         kFarGroundDistance = 0.7F;   // havok units (~49 game units), beyond the 0.5 short ray
 
@@ -41,6 +41,8 @@ namespace hooks
             a_world->PickObject(farPick);
             if (farPick.rayOutput.HasHit() && farPick.rayOutput.hitFraction * kFarProbeLength > kFarGroundDistance) {
                 ResetMisses(a_controller);
+                logger::info("[AMR-AIR] far probe: ground {:.1f} u below -> in air",
+                    farPick.rayOutput.hitFraction * kFarProbeLength * 69.991249F);
                 return true;
             }
             std::lock_guard guard(g_missLock);
@@ -50,6 +52,7 @@ namespace hooks
             const auto count = ++g_misses[a_controller];
             if (count >= kMissesBeforeAir) {
                 g_misses.erase(a_controller);
+                logger::info("[AMR-AIR] {} consecutive ray misses -> in air", count);
                 return true;
             }
             return false;
