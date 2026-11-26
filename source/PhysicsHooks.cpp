@@ -49,7 +49,7 @@ namespace hooks
                 logger::info("[AMR-AIR] no ground within {:.0f} u -> in air", kFarProbeLength * 69.991249F);
                 return true;
             }
-            if (t() && farPick.rayOutput.hitFraction * kFarProbeLength > kFarGroundDistance) {
+            if (farPick.rayOutput.hitFraction * kFarProbeLength > kFarGroundDistance) {
                 ResetMisses(a_controller);
                 logger::info("[AMR-AIR] far probe: ground {:.1f} u below -> in air",
                     farPick.rayOutput.hitFraction * kFarProbeLength * 69.991249F);
