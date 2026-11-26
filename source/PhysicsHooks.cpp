@@ -36,15 +36,16 @@ namespace hooks
 
         // true once the miss should really switch the actor to in-air
         bool ShouldGoInAir(const RE::bhkCharacterController* a_controller, RE::bhkWorld* a_world,
-            const RE::hkVector4& a_position, const RE::CFilter& a_filter)
+            const RE::hkVector4& a_position, const RE::CFilter& a_filter, bool a_immediateWhenNoGround)
         {
             RE::bhkPickData farPick;
             farPick.rayInput.from = a_position;
             farPick.rayInput.to = a_position - RE::hkVector4{ 0.0F, 0.0F, kFarProbeLength, 0.0F };
             farPick.rayInput.filterInfo = a_filter;
             a_world->PickObject(farPick);
-            if (!farPick.rayOutput.rootCollidable) {
-                // nothing within ~105 u below: a real drop (tall ledge), switch at once
+            if (a_immediateWhenNoGround && !farPick.rayOutput.rootCollidable) {
+                // player only: nothing within ~105 u below is a real drop (tall ledge), switch at once.
+                // Other actors (enemies being juggled) keep the earlier behaviour so their knock-up is unchanged.
                 ResetMisses(a_controller);
                 logger::info("[AMR-AIR] no ground within {:.0f} u -> in air", kFarProbeLength * 69.991249F);
                 return true;
@@ -141,7 +142,8 @@ namespace hooks
             if (pickData.rayOutput.normal.quad.m128_f32[2] < a_characterController->zNormal) {
                 a_characterController->flags.set(RE::CHARACTER_FLAGS::kSupport);
             }
-        } else if (ShouldGoInAir(a_characterController, world.get(), position, collisionFilterInfo)) {
+        } else if (ShouldGoInAir(a_characterController, world.get(), position, collisionFilterInfo,
+                       character && character->IsPlayerRef())) {
             a_characterController->wantState = RE::hkpCharacterStateType::kInAir;
             a_characterController->flags.reset(RE::CHARACTER_FLAGS::kSupport);
         }
