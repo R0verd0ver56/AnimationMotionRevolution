@@ -23,7 +23,7 @@ configure_file(cmake/version.rc.in version.rc @ONLY)
 
 add_commonlibsse_plugin(${PROJECT_NAME}
     NAME "AnimationMotionRevolution"
-    COMPATIBLE_RUNTIMES 1.6.1170.0
+    COMPATIBLE_RUNTIMES 1.6.1170.0 1.7.104.0
     MINIMUM_SKSE_VERSION 2.2.6
     STRUCT_DEPENDENT
     SOURCES
