@@ -13,9 +13,10 @@ namespace hooks
     {
         // v7 (1.7.104): the one-step ground-ray misses that happen while standing on flat ground during attack clips
         // switched the actor to in-air at once (aerial attack on the ground). Real drops still switch immediately
-        // when a longer probe shows the ground is far below or finds no ground at all; otherwise the switch waits
-        // for kMissesBeforeAir consecutive misses.
-        constexpr std::uint32_t kMissesBeforeAir = 255;
+        // when a longer probe shows the ground is far below. The player also switches at once when the probe finds no
+        // ground at all (tall ledge); otherwise the switch waits for the miss threshold below (255 player, 6 enemies).
+        constexpr std::uint32_t kMissesBeforeAirPlayer = 255;  // player: only a real drop (far probe) switches to air
+        constexpr std::uint32_t kMissesBeforeAirOther = 6;     // enemies: the K=6 behaviour that gave the consistent knock-up
         constexpr float         kFarProbeLength = 1.5F;      // havok units (~105 game units)
         constexpr float         kFarGroundDistance = 0.7F;   // havok units (~49 game units), beyond the 0.5 short ray
 
@@ -45,12 +46,12 @@ namespace hooks
             a_world->PickObject(farPick);
             if (a_immediateWhenNoGround && !farPick.rayOutput.rootCollidable) {
                 // player only: nothing within ~105 u below is a real drop (tall ledge), switch at once.
-                // Other actors (enemies being juggled) keep the earlier behaviour so their knock-up is unchanged.
+                // Other actors (enemies being juggled) keep the K=6 behaviour: a probe that hits nothing is not a drop.
                 ResetMisses(a_controller);
                 logger::info("[AMR-AIR] no ground within {:.0f} u -> in air", kFarProbeLength * 69.991249F);
                 return true;
             }
-            if (farPick.rayOutput.hitFraction * kFarProbeLength > kFarGroundDistance) {
+            if (farPick.rayOutput.HasHit() && farPick.rayOutput.hitFraction * kFarProbeLength > kFarGroundDistance) {
                 ResetMisses(a_controller);
                 logger::info("[AMR-AIR] far probe: ground {:.1f} u below -> in air",
                     farPick.rayOutput.hitFraction * kFarProbeLength * 69.991249F);
@@ -61,7 +62,7 @@ namespace hooks
                 g_misses.clear();
             }
             const auto count = ++g_misses[a_controller];
-            if (count >= kMissesBeforeAir) {
+            if (count >= (a_immediateWhenNoGround ? kMissesBeforeAirPlayer : kMissesBeforeAirOther)) {
                 g_misses.erase(a_controller);
                 logger::info("[AMR-AIR] {} consecutive ray misses -> in air", count);
                 return true;
